@@ -19,6 +19,15 @@ const LEVEL_TIMES: [u32; 10] = [1000, 850, 700, 600, 500, 400, 300, 250, 221, 19
 const LEVEL_LINES: [u32; 10] = [20,   40,  60,  80,  100, 120, 140, 160, 180, 200];
 const NB_HIGHSCORES: usize = 5;
 
+#[derive(Clone, Copy)]
+enum TextureColor {
+    Green,
+    Blue,
+    Red,
+    Black,
+    White
+}
+
 type Piece = Vec<Vec<u8>>;
 type States = Vec<Piece>;
 
@@ -192,6 +201,44 @@ struct Tetrimino {
     y: usize,
     current_state: u8,
 }
+
+fn create_texture_rect<'a>(
+    canvas: &mut Canvas<Window>, 
+    texture_creator: &'a TextureCreator<WindowContext>, 
+    r: u8, g: u8, b: u8, size_w: u32, size_h: u32) -> Option<Texture<'a>> {
+      // We'll want to handle failures outside of this function.
+    if let Ok(mut square_texture) =
+        texture_creator.create_texture_target(None, size_w, size_h) {
+            canvas.with_texture_canvas(&mut square_texture, |texture| {
+                //match color {
+                    // For now, TextureColor only handles two colors.
+                    //TextureColor::Green => texture.set_draw_color(Color::RGB(0, 255, 0)),
+                    //TextureColor::Blue => texture.set_draw_color(Color::RGB(0, 0, 255)),
+                    //TextureColor::Red => texture.set_draw_color(Color::RGB(255, 0, 0)),
+                    //TextureColor::Black => texture.set_draw_color(Color::RGB(0, 0, 0)),
+                    //TextureColor::White => texture.set_draw_color(Color::RGB(255, 255, 255)),
+                //}
+                texture.set_draw_color(Color::RGB(r, g, b));
+                texture.clear();
+            }).expect("Failed to color a texture");
+            Some(square_texture)
+        } else {
+            // An error occured so we return nothing and let the function caller handle the error.
+            None
+        }
+}
+
+//fn create_texture_from_text<'a>(
+//    texture_creator: &'a TextureCreator<WindowContext>,
+//    font: &sdl2::ttf::Font,
+//    text: &str,
+//    r: u8, g: u8, b: u8,) -> Option<Texture<'a>> {
+//    if let Ok(surface) = font.render(text).blended(Color::RGB(r, g, b)) {
+//        texture_creator.create_texture_from_surface(&surface).ok()
+//    } else {
+//        None
+//    }
+//}
 
 impl Tetrimino {
     fn rotate(&mut self, game_map: &[Vec<u8>]) {
@@ -498,16 +545,59 @@ fn is_time_over(tetris: &Tetris, timer: &SystemTime) -> bool {
 }
 
 fn main() {
-    let mut tetris = Tetris::new();
-    let mut timer = SystemTime::now();
-    let sdl_context = sdl2::init().expect("SDL initialization failed");
+    let sdl_context = sdl2::init().expect("SDL initialization
+         failed");
+    let video_subsystem = sdl_context.video().expect("Couldn't get
+          SDL video subsystem");
     let width = 600;
     let height = 800;
+
+    let mut tetris = Tetris::new();
+    let mut timer = SystemTime::now();
 
     let mut event_pump = sdl_context.event_pump().expect("Failed to get SDL event pump");
 
     let grid_x = (width - TETRIS_HEIGHT as u32 * 10) as i32 / 2;
     let grid_y = (height - TETRIS_HEIGHT as u32 * 16) as i32 / 2;
+
+    let window = video_subsystem.window("Tetris", width, height)
+        .position_centered() // to put it in the middle of the screen
+        .build() // to create the window
+        .expect("Failed to create window");
+    let mut canvas = window.into_canvas()
+        .target_texture()
+        .present_vsync() // To enable v-sync.
+        .build()
+        .expect("Couldn't get window's canvas");
+    let texture_creator: TextureCreator<_> = canvas.texture_creator();
+    let grid = create_texture_rect(&mut canvas,
+                                   &texture_creator,
+                                   0, 0, 0,
+                                   TETRIS_HEIGHT as u32 * 10,
+                                   TETRIS_HEIGHT as u32 * 16)
+        .expect("Failed to create a texture");
+    let border = create_texture_rect(&mut canvas,
+                                     &texture_creator,
+                                     255, 255, 255,
+                                     TETRIS_HEIGHT as u32 * 10 + 20,
+                                     TETRIS_HEIGHT as u32 * 16 + 20)
+        .expect("Failed to create a texture");
+    
+    macro_rules! texture {
+        ($r:expr, $g:expr, $b:expr) => (
+            create_texture_rect(
+                &mut canvas,
+                &texture_creator,
+                $r, $g, $b,
+                TETRIS_HEIGHT as u32,
+                TETRIS_HEIGHT as u32).unwrap()
+        )
+    }
+    
+    let textures = [texture!(255, 69, 69), texture!(255, 220, 69),
+                    texture!(237, 150, 37),texture!(171, 99, 237),
+                    texture!(77, 149,239), texture!(39, 218, 225),
+                    texture!(45, 216, 47)];
 
     loop {
         if is_time_over(&tetris, &timer) {
@@ -524,6 +614,22 @@ fn main() {
         }
 
         // We need to draw the tetris "grid" in here.
+        canvas.set_draw_color(Color::RGB(255, 0, 0));
+        canvas.clear();
+        canvas.copy(
+            &border,
+            None,
+            Rect::new((width - TETRIS_HEIGHT as u32 * 10) as i32 / 2 - 10,
+                      (height - TETRIS_HEIGHT as u32 * 16) as i32 / 2 - 10,
+                      TETRIS_HEIGHT as u32 * 10 + 20, TETRIS_HEIGHT as u32 * 16 + 20))
+            .expect("Couldn't copy texture into window");
+        canvas.copy(
+            &grid,
+            None,
+            Rect::new((width - TETRIS_HEIGHT as u32 * 10) as i32 / 2,
+                      (height - TETRIS_HEIGHT as u32 * 16) as i32 / 2,
+                      TETRIS_HEIGHT as u32 * 10, TETRIS_HEIGHT as u32 * 16))
+            .expect("Couldn't copy texture into window");
 
         if tetris.current_piece.is_none() {
             let current_piece = tetris.create_new_tetrimino();
@@ -537,6 +643,24 @@ fn main() {
         if !handle_events(&mut tetris, &mut quit, &mut timer, &mut event_pump) {
             if let Some(ref mut piece) = tetris.current_piece {
                 // We need to draw our current tetrimino in here.
+                for (line_nb, line) in piece.states[piece.current_state as usize]
+                    .iter().enumerate() {
+                    for (case_nb, case) in line.iter().enumerate() {
+                        if *case == 0 {
+                            continue
+                        }
+                        // The new part is here:
+                        canvas.copy(
+                            &textures[*case as usize - 1],
+                            None,
+                            Rect::new(grid_x + (piece.x + case_nb as isize)
+                                      as i32 * TETRIS_HEIGHT as i32,
+                                      grid_y + (piece.y + line_nb) as i32 *
+                                      TETRIS_HEIGHT as i32, TETRIS_HEIGHT
+                                      as u32, TETRIS_HEIGHT as u32))
+                            .expect("Couldn't copy texture into window");
+                    }
+                }
             }
         }
         if quit {
@@ -545,7 +669,22 @@ fn main() {
         }
 
         // We need to draw the game map in here.
-
+        for (line_nb, line) in tetris.game_map.iter().enumerate() {
+            for (case_nb, case) in line.iter().enumerate() {
+                if *case == 0 {
+                    continue
+                }
+                canvas.copy(
+                    &textures[*case as usize - 1],
+                    None,
+                    Rect::new(grid_x + case_nb as i32 * TETRIS_HEIGHT
+                              as i32, grid_y + line_nb as i32 * TETRIS_HEIGHT as i32,
+                              TETRIS_HEIGHT as u32, TETRIS_HEIGHT as u32))
+                    .expect("Couldn't copy texture into window");
+            }
+        }
+        canvas.present();
+        
         sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
 }
