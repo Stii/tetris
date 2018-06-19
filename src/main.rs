@@ -228,17 +228,58 @@ fn create_texture_rect<'a>(
         }
 }
 
-//fn create_texture_from_text<'a>(
-//    texture_creator: &'a TextureCreator<WindowContext>,
-//    font: &sdl2::ttf::Font,
-//    text: &str,
-//    r: u8, g: u8, b: u8,) -> Option<Texture<'a>> {
-//    if let Ok(surface) = font.render(text).blended(Color::RGB(r, g, b)) {
-//        texture_creator.create_texture_from_surface(&surface).ok()
-//    } else {
-//        None
-//    }
-//}
+fn create_texture_from_text<'a>(
+    texture_creator: &'a TextureCreator<WindowContext>,
+    font: &sdl2::ttf::Font,
+    text: &str,
+    r: u8, g: u8, b: u8,) -> Option<Texture<'a>> {
+    if let Ok(surface) = font.render(text).blended(Color::RGB(r, g, b)) {
+        texture_creator.create_texture_from_surface(&surface).ok()
+    } else {
+        None
+    }
+}
+
+fn get_rect_from_text(text: &str, x: i32, y: i32) -> Option<Rect> {
+    Some(Rect::new(x, y, text.len() as u32 * 20, 30))
+}
+
+fn display_game_information<'a>(
+    tetris: &Tetris,
+    canvas: &mut Canvas<Window>,
+    texture_creator: &'a TextureCreator<WindowContext>,
+    font: &sdl2::ttf::Font,
+    start_x_point: i32) {
+    let score_text = format!("Score: {}", tetris.score);
+    let lines_sent_text = format!("Lines sent: {}", tetris.nb_lines);
+    let level_text = format!("Level: {}", tetris.current_level);
+
+    let score = create_texture_from_text(
+        &texture_creator, &font,
+        &score_text, 255, 255, 255)
+        .expect("Cannot render text");
+    let lines_sent = create_texture_from_text(
+        &texture_creator, &font,
+        &lines_sent_text, 255, 255, 255)
+        .expect("Cannot render text");
+    let level = create_texture_from_text(
+        &texture_creator, &font,
+        &level_text, 255, 255, 255)
+        .expect("Cannot render text");
+     
+    canvas.copy(
+        &score, None,
+        get_rect_from_text(&score_text, 275, 75))
+        .expect("Couldn't copy text");
+    canvas.copy(
+        &lines_sent, None,
+        get_rect_from_text(&score_text, 275, 125))
+        .expect("Couldn't copy text");
+    canvas.copy(
+        &level, None,
+        get_rect_from_text(&score_text, 275, 160))
+        .expect("Couldn't copy text");
+}
 
 impl Tetrimino {
     fn rotate(&mut self, game_map: &[Vec<u8>]) {
@@ -557,7 +598,8 @@ fn main() {
 
     let mut event_pump = sdl_context.event_pump().expect("Failed to get SDL event pump");
 
-    let grid_x = (width - TETRIS_HEIGHT as u32 * 10) as i32 / 2;
+    //let grid_x = (width - TETRIS_HEIGHT as u32 * 10) as i32 / 2;
+    let grid_x = 20;
     let grid_y = (height - TETRIS_HEIGHT as u32 * 16) as i32 / 2;
 
     let window = video_subsystem.window("Tetris", width, height)
@@ -619,14 +661,14 @@ fn main() {
         canvas.copy(
             &border,
             None,
-            Rect::new((width - TETRIS_HEIGHT as u32 * 10) as i32 / 2 - 10,
+            Rect::new(10,
                       (height - TETRIS_HEIGHT as u32 * 16) as i32 / 2 - 10,
                       TETRIS_HEIGHT as u32 * 10 + 20, TETRIS_HEIGHT as u32 * 16 + 20))
             .expect("Couldn't copy texture into window");
         canvas.copy(
             &grid,
             None,
-            Rect::new((width - TETRIS_HEIGHT as u32 * 10) as i32 / 2,
+            Rect::new(20,
                       (height - TETRIS_HEIGHT as u32 * 16) as i32 / 2,
                       TETRIS_HEIGHT as u32 * 10, TETRIS_HEIGHT as u32 * 16))
             .expect("Couldn't copy texture into window");
@@ -668,6 +710,24 @@ fn main() {
             break
         }
 
+        let ttf_context = sdl2::ttf::init()
+            .expect("SDL TTF initialization failed");
+        let mut font = ttf_context.load_font("assets/hack.ttf", 128)
+            .expect("Couldn't load the font");
+        let rendered_text = create_texture_from_text(
+            &texture_creator,
+            &font, "test", 0, 0, 0).expect("Cannot render text");
+        canvas.copy(
+            &rendered_text,
+            None,
+            Some(Rect::new(width as i32 - 40, 0, 40, 30)))
+            .expect("Couldn't copy text");
+        display_game_information(
+            &tetris,
+            &mut canvas,
+            &texture_creator,
+            &font,
+            width as i32 - grid_x - 10);
         // We need to draw the game map in here.
         for (line_nb, line) in tetris.game_map.iter().enumerate() {
             for (case_nb, case) in line.iter().enumerate() {
